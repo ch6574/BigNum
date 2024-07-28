@@ -5,19 +5,20 @@
  *GPL-3.0-or-later
  ******************************************************************************/
 
-#include "big_uint.hpp"
+#include <limits>
 
-using BigNum::BigUInt;
+#include "big_int.hpp"
+using BigNum::BigInt;
 
 //
 // Simple usage
 //
 void simple_demo() {
   // Construct via a hex string
-  auto bn = BigUInt("0x1234'1234'1234'1234'1234'1234'1234'1234");
+  auto bn = BigInt("0x1234'1234'1234'1234'1234'1234'1234'1234");
 
   // Divide by a constant
-  auto res = BigUInt::div(bn, 3u);
+  auto res = BigInt::div(bn, 3u);
   std::cout << bn << " / 3 is ... " << "quot: " << res.quot
             << " rem: " << res.rem << std::endl;
 }
@@ -25,10 +26,10 @@ void simple_demo() {
 //
 // Calculating a large factorial
 //
-BigUInt factorial(unsigned n) {
-  auto res = BigUInt(n);
-  while (--n > 1) {
-    res *= BigUInt(n);
+BigInt factorial(unsigned n) {
+  auto res = BigInt(n);
+  while (--n > BigInt::ONE) {
+    res *= BigInt(n);
   }
   return res;
 }
@@ -42,16 +43,16 @@ void factorial_demo() {
 // RSA demo
 //
 void rsa_demo() {
-  const BigUInt m{"0xDEADBEEF"};  // message
+  const BigInt m{0xDEADBEEF};  // message
 
-  const BigUInt n{5551201688147u};  // public key (mod)
-  const BigUInt e{65537u};          // public key (exp)
-  const BigUInt d{109182490673u};   // private key
+  const BigInt n{5551201688147u};  // public key (mod)
+  const BigInt e{65537u};          // public key (exp)
+  const BigInt d{109182490673u};   // private key
 
-  auto c = BigUInt::pow(m, e, n);  // m ** e % n
+  auto c = BigInt::pow(m, e, n);  // m ** e % n
   std::cout << "Encrypting " << m << " --> " << c << std::endl;
 
-  auto mm = BigUInt::pow(c, d, n);  // c ** d % n
+  auto mm = BigInt::pow(c, d, n);  // c ** d % n
   std::cout << "Decrypting " << c << " --> " << mm << std::endl;
 
   std::cout << ((m == mm) ? "Success" : "Failure") << std::endl;
