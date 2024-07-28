@@ -1,5 +1,5 @@
 # Synopsis
-A (toy) unsigned integer class with unlimited variable magnitude.
+A (toy) signed integer class with unlimited variable magnitude.
 
 # Example
 ## Checkout and build
@@ -14,15 +14,15 @@ cmake --build build -t test
 
 ## Simple usage
 ```c++
-#include "big_uint.hpp"
-using BigNum::BigUInt;
+#include "big_int.hpp"
+using BigNum::BigInt;
 
 int main() {
   // Construct via a hex string
-  auto bn = BigUInt("0x1234'1234'1234'1234'1234'1234'1234'1234");
+  auto bn = BigInt("0x1234'1234'1234'1234'1234'1234'1234'1234");
 
   // Divide by a constant
-  auto res = BigUInt::div(bn, 3u);
+  auto res = BigInt::div(bn, 3u);
   std::cout << bn << " / 3 is ... " << "quot: " << res.quot
             << " rem: " << res.rem << std::endl;
 }
@@ -34,13 +34,13 @@ You can validate this against `python3 -c "q,r=(divmod(0x1234_1234_1234_1234_123
 
 ## Calculating a large factorial
 ```c++
-#include "big_uint.hpp"
-using BigNum::BigUInt;
+#include "big_int.hpp"
+using BigNum::BigInt;
 
-BigUInt factorial(unsigned n) {
-  auto res = BigUInt(n);
+BigInt factorial(unsigned n) {
+  auto res = BigInt(n);
   while (--n > 1) {
-    res *= BigUInt(n);
+    res *= BigInt(n);
   }
   return res;
 }
@@ -59,20 +59,20 @@ You can validate this against `python3 -c "import math; print(hex(math.factorial
 
 ## RSA style encryption
 ```c++
-#include "big_uint.hpp"
-using BigNum::BigUInt;
+#include "big_int.hpp"
+using BigNum::BigInt;
 
 int main() {
-  const BigUInt m{"0xDEADBEEF"};    // message
+  const BigInt m{0xDEADBEEF};      // message
 
-  const BigUInt n{5551201688147u};  // public key (mod)
-  const BigUInt e{65537u};          // public key (exp)
-  const BigUInt d{109182490673u};   // private key
+  const BigInt n{5551201688147u};  // public key (mod)
+  const BigInt e{65537u};          // public key (exp)
+  const BigInt d{109182490673u};   // private key
 
-  auto c = BigUInt::pow(m, e, n);   // m ** e % n
+  auto c = BigInt::pow(m, e, n);   // m ** e % n
   std::cout << "Encrypting " << m << " --> " << c << std::endl;
 
-  auto mm = BigUInt::pow(c, d, n);  // c ** d % n
+  auto mm = BigInt::pow(c, d, n);  // c ** d % n
   std::cout << "Decrypting " << c << " --> " << mm << std::endl;
 }
 ```
