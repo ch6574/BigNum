@@ -6,7 +6,8 @@
  ******************************************************************************/
 
 #define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 
 #include "big_int.hpp"
 
@@ -60,9 +61,8 @@ TEST_CASE("Basic") {
 
     // Test junk input
     REQUIRE_THROWS_WITH(BigInt("123qwerty"),
-                        Catch::Matchers::Contains("Invalid decimal string"));
-    REQUIRE_THROWS_WITH(BigInt("0xQwErTy"),
-                        Catch::Matchers::Contains("Invalid hex string"));
+                        "Invalid decimal string: 123qwerty");
+    REQUIRE_THROWS_WITH(BigInt("0xQwErTy"), "Invalid hex string: QwErTy");
   }
 
   SECTION("Compares") {
@@ -273,8 +273,7 @@ TEST_CASE("Math") {
     REQUIRE(tmp7.rem == BigInt::NEG_TWO);
 
     // Illogical cases
-    REQUIRE_THROWS_WITH(bn_ff / BigInt::ZERO,
-                        Catch::Matchers::Contains("Divide by zero"));
+    REQUIRE_THROWS_WITH(bn_ff / BigInt::ZERO, "Divide by zero!");
   }
 
   SECTION("Power") {
@@ -306,9 +305,8 @@ TEST_CASE("Math") {
   }
 
   SECTION("Roots") {
-    REQUIRE_THROWS_WITH(
-        BigInt::isqrt(BigInt::NEG_ONE),
-        Catch::Matchers::Contains("Cannot caclulate negative roots"));
+    REQUIRE_THROWS_WITH(BigInt::isqrt(BigInt::NEG_ONE),
+                        "Cannot caclulate negative roots!");
     REQUIRE(BigInt::isqrt(BigInt::ZERO) == BigInt::ZERO);
     REQUIRE(BigInt::isqrt(5u) == BigInt::TWO);
     REQUIRE(BigInt::isqrt(bn_big) == BigInt("0x4443C4434C41F33D"));
@@ -326,11 +324,9 @@ TEST_CASE("Math") {
   }
 
   SECTION("Log") {
-    REQUIRE_THROWS_WITH(
-        BigInt::log2(BigInt::NEG_ONE),
-        Catch::Matchers::Contains("Cannot caclulate negative logs"));
-    REQUIRE_THROWS_WITH(BigInt::log2(BigInt::ZERO),
-                        Catch::Matchers::Contains("Log of 0"));
+    REQUIRE_THROWS_WITH(BigInt::log2(BigInt::NEG_ONE),
+                        "Cannot caclulate negative logs!");
+    REQUIRE_THROWS_WITH(BigInt::log2(BigInt::ZERO), "Log of 0!");
     REQUIRE(BigInt::log2(BigInt::ONE) == 0u);
     REQUIRE(BigInt::log2(bn_ff) == 7u);     // log2(255) == 7.994...
     REQUIRE(BigInt::log2(bn_big) == 124u);  // really 124.186...
@@ -587,4 +583,15 @@ TEST_CASE("Output") {
   }
 }
 
+TEST_CASE("Random") {
+  SECTION("Fixed Seed") {
+    // Using a seed of 1234 makes the random sequence predictable
+    BigIntRand rng(1234u);
+    REQUIRE(rng.random(136) == BigInt("0x700eecccd15ddc359f4285267f66e2d331"));
+    REQUIRE(rng.random(136) == BigInt("0xdc54dab1c7ac7e8fc577d7f9c90d42989c"));
+    REQUIRE(rng.random(136) == BigInt("0xcd477eab32d2201e46c65c9a269024e945"));
+    REQUIRE(rng.random(136) == BigInt("0x1dbb3576e03d1f1a28a81f7cf5489eecd0"));
+    REQUIRE(rng.random(136) == BigInt("0xaef76d457ca11ddc80413770034de8785b"));
+  }
+}
 }  // namespace BigNum

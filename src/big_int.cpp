@@ -8,13 +8,13 @@
 #include "big_int.hpp"
 
 #include <assert.h>
-#include <fmt/core.h>  // replace with std::format
 
 #include <algorithm>
 #include <bit>
 #include <cmath>
 #include <iostream>
 #include <numeric>
+#include <random>
 #include <ranges>
 #include <span>
 #include <string>
@@ -36,7 +36,7 @@ BigInt::BigInt() : magnitude(0), negative{false} {}
 BigInt::BigInt(std::uint32_t data) : negative{false} {
   // Type must be equal to "WORD" for a direct copy to make sense
   static_assert(std::is_same<std::uint32_t, WORD>::value, "Type mismatch");
-  BigInt::magnitude = std::vector<WORD>{data};
+  magnitude = std::vector<WORD>{data};
   normalize();
 }
 
@@ -44,7 +44,7 @@ BigInt::BigInt(std::int32_t data) {
   // C++20 mandates two's complement
   const auto mask = data >> 31;
   std::uint32_t m = (data + mask) ^ mask;
-  BigInt::magnitude = std::vector<WORD>{m};
+  magnitude = std::vector<WORD>{m};
   negative = mask & 1u;
   normalize();
 }
@@ -53,9 +53,9 @@ BigInt::BigInt(std::uint64_t data) : negative{false} {
   std::uint32_t lower = data & WORD_MASK;
   std::uint32_t upper = data >> WORD_BITS;
   if (upper)
-    BigInt::magnitude = std::vector<WORD>{lower, upper};
+    magnitude = std::vector<WORD>{lower, upper};
   else
-    BigInt::magnitude = std::vector<WORD>{lower};
+    magnitude = std::vector<WORD>{lower};
   normalize();
 }
 
@@ -66,9 +66,9 @@ BigInt::BigInt(std::int64_t data) {
   std::uint32_t lower = m & WORD_MASK;
   std::uint32_t upper = m >> WORD_BITS;
   if (upper)
-    BigInt::magnitude = std::vector<WORD>{lower, upper};
+    magnitude = std::vector<WORD>{lower, upper};
   else
-    BigInt::magnitude = std::vector<WORD>{lower};
+    magnitude = std::vector<WORD>{lower};
   negative = mask & 1u;
   normalize();
 }
@@ -84,7 +84,9 @@ BigInt::BigInt(std::string_view num) : negative{false} {
        ((num.substr(0, 2) == "0x") || num.substr(0, 2) == "0X")) ||
       (num.length() > 3 &&
        ((num.substr(0, 3) == "-0x") || num.substr(0, 3) == "-0X"))) {
+    //
     // hex strings "0x...". Remove prefix and any ' separators.
+    //
     if (num[0] == '-') {
       negative = true;
       num.remove_prefix(3);
@@ -98,37 +100,20 @@ BigInt::BigInt(std::string_view num) : negative{false} {
     if (hex.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
       throw std::invalid_argument("Invalid hex string: " + std::string{num});
 
-    // Read string in chunks of 8 hex chars (i.e. 32bits) directly into data
-    auto chunks = hex.length() / 8;
-    auto remainder = hex.length() % 8;
-    magnitude = std::vector<WORD>(remainder ? chunks + 1 : chunks);
-
-    std::size_t i{0};
-    for (i = 0; i < chunks; ++i) {
-      // Process chunks from right hand side of string as base 16
-      auto start = hex.length() - (8 * i) - 8;
-      auto text = hex.substr(start, 8);
-      magnitude[i] = std::stoul(text, nullptr, 16) & WORD_MASK;
-    }
-    if (remainder) {
-      auto text = hex.substr(0, remainder);
-      magnitude[i] = std::stoul(text, nullptr, 16) & WORD_MASK;
-    }
-
-    // N.B. in c++23 one could use the below to do all the chunk processing...
-    // data = std::string_view{hex}
-    //   | std::views::reverse
-    //   | std::views::chunk(8)
-    //   | std::ranges::to<std::vector<std::string>>()
-    //   | std::view::transform([](auto v){
-    //         WORD i{0};
-    //         std::from_chars(v.data(), v.data() + v.size(), i, 16);
-    //         return i;
-    //       })
-    //   | std::ranges::to<std::vector<WORD>>();
-
+    // Read string in chunks of 8 hex chars (32 bits), and sum into tmp
+    auto tmp = BigInt::ZERO;
+    std::ranges::for_each(
+        std::string_view{hex} | std::views::chunk(8), [&](auto v) {
+          WORD i{0};
+          std::from_chars(v.data(), v.data() + v.size(), i, 16);
+          tmp <<= v.size() * 4;  // each char is 4 bits
+          tmp += i;
+        });
+    magnitude = std::move(tmp.magnitude);  // Take the tmp BigInt's data
   } else if (num.length() > 0) {
+    //
     // Assume decimal. Remove any ' separators, then validate.
+    //
     if (num[0] == '-') {
       negative = true;
       num.remove_prefix(1);
@@ -141,38 +126,19 @@ BigInt::BigInt(std::string_view num) : negative{false} {
       throw std::invalid_argument("Invalid decimal string: " +
                                   std::string{num});
 
-    // Read string in chunks of 9 decimal chars, and sum into temporary BigInt
-    auto chunks = dec.length() / 9;
-    auto remainder = dec.length() % 9;
-    auto tmp = BigInt::ZERO;
     static unsigned pow10[] = {1,           10,           100,       1'000,
                                10'000,      100'000,      1'000'000, 10'000'000,
                                100'000'000, 1'000'000'000};
-
-    std::size_t i{0};
-    for (i = 0; i < chunks; ++i) {
-      // Process chunks from left side of string as base 10
-      auto text = dec.substr(9 * i, 9);
-      tmp *= pow10[9];                       // "shift" by 10**9
-      tmp += std::stoul(text, nullptr, 10);  // add next chunk
-    }
-    if (remainder) {
-      auto text = dec.substr(9 * i, remainder);
-      tmp *= pow10[remainder];
-      tmp += std::stoul(text, nullptr, 10);
-    }
-    magnitude = std::move(tmp.magnitude);  // Take the temporary BigInt's data
-
-    // N.B. in c++23 one could use the below to do all the chunk processing...
-    // auto tmp = BigInt::ZERO;
-    // static unsigned pow10[] = {1, 10, 100, ... };
-    // std::ranges::for_each(std::string_view{dec} | std::views::chunk(9),
-    //   [&](auto v){
-    //       WORD i{0};
-    //       std::from_chars(v.data(), v.data() + v.size(), i, 10);
-    //       tmp *= pow10[v.size()];
-    //       tmp += i;
-    //   });
+    // // Read string in chunks of 9 decimal chars, and sum into tmp
+    auto tmp = BigInt::ZERO;
+    std::ranges::for_each(
+        std::string_view{dec} | std::views::chunk(9), [&](auto v) {
+          WORD i{0};
+          std::from_chars(v.data(), v.data() + v.size(), i, 10);
+          tmp *= pow10[v.size()];
+          tmp += i;
+        });
+    magnitude = std::move(tmp.magnitude);  // Take the tmp BigInt's data
   } else {
     throw std::invalid_argument("Invalid numeric string: " + std::string{num});
   }
@@ -180,8 +146,7 @@ BigInt::BigInt(std::string_view num) : negative{false} {
   normalize();
 }
 
-BigInt::BigInt(float num) {
-  static_assert(sizeof(float) == 4);  // C++23 use std::float32_t
+BigInt::BigInt(std::float32_t num) {
   if (num < 1.0f && num > -1.0f) {
     *this = ZERO;
     return;
@@ -203,8 +168,7 @@ BigInt::BigInt(float num) {
   normalize();
 }
 
-BigInt::BigInt(double num) {
-  static_assert(sizeof(double) == 8);  // C++23 use std::float64_t
+BigInt::BigInt(std::float64_t num) {
   if (num < 1.0 && num > -1.0) {
     *this = ZERO;
     return;
@@ -279,7 +243,7 @@ void BigInt::map(const BigInt &other, std::function<WORD(WORD, WORD)> func) {
   auto max_size = std::max(magnitude.size(), other.magnitude.size());
   if (magnitude.size() < max_size) magnitude.resize(max_size);
 
-  // C++23 has "zip" to make this more concise.
+  // If C++ gains "zip_longest" we could make this more concise.
   for (auto i = 0ul; i < max_size; ++i) {
     set_word(i, func(get_word(i), other.get_word(i)));
   }
@@ -302,7 +266,7 @@ BigInt BigInt::map(const BigInt &lhs, const BigInt &rhs,
   auto ret = ZERO;
   ret.magnitude.resize(max_size);
 
-  // C++23 has "zip" to make this more concise.
+  // If C++ gains "zip_longest" we could make this more concise.
   for (auto i = 0ul; i < max_size; ++i) {
     ret.set_word(i, func(lhs.get_word(i), rhs.get_word(i)));
   }
@@ -923,10 +887,8 @@ std::size_t BigInt::bitsize() const {
  * @return std::size_t a count of the 1 bits.
  */
 std::size_t BigNum::BigInt::popcount() const {
-  // C++23 has std::ranges::fold_left to tidy this up
-  return std::accumulate(
-      magnitude.cbegin(), magnitude.cend(), 0,
-      [](std::size_t a, WORD b) { return a + std::popcount(b); });
+  return std::ranges::fold_left(
+      magnitude, 0, [](auto a, auto b) { return a + std::popcount(b); });
 }
 
 /**
@@ -944,10 +906,10 @@ std::ostream &operator<<(std::ostream &os, const BigInt &bn) {
     for (auto &i : bn.magnitude | std::views::reverse) {
       if (first) {
         if (bn.negative) os << "-";
-        os << fmt::format("{:#x}", i);  // 0x prefix the most significant word
+        os << std::format("{:#x}", i);  // 0x prefix the most significant word
         first = false;
       } else {
-        os << fmt::format("{:08x}", i);  // Zero pad the rest
+        os << std::format("{:08x}", i);  // Zero pad the rest
       }
     }
   }
@@ -969,10 +931,10 @@ std::string BigInt::to_binary() const {
   bool first = true;
   for (auto &i : magnitude | std::views::reverse) {
     if (first) {
-      result.append(fmt::format("{:#b}", i));  // 0b prefix
+      result.append(std::format("{:#b}", i));  // 0b prefix
       first = false;
     } else {
-      result.append(fmt::format("{:032b}", i));  // Zero pad the rest
+      result.append(std::format("{:032b}", i));  // Zero pad the rest
     }
   }
 
@@ -1002,10 +964,10 @@ std::string BigInt::to_decimal() const {
     auto next = div(tmp, divisor);
     if (next.quot == ZERO) {
       // Left most digits, no padding
-      result.insert(0, fmt::format("{:d}", next.rem.get_word(0)));
+      result.insert(0, std::format("{:d}", next.rem.get_word(0)));
     } else {
       // Zero pad the rest
-      result.insert(0, fmt::format("{:09d}", next.rem.get_word(0)));
+      result.insert(0, std::format("{:09d}", next.rem.get_word(0)));
     }
     tmp = next.quot;
   }
@@ -1065,16 +1027,16 @@ std::int64_t BigNum::BigInt::to_int64_t() const {
   }
 }
 
-float BigNum::BigInt::to_float() const {
+std::float32_t BigNum::BigInt::to_float() const {
   if (*this == NEG_ONE) return -1.0f;
   if (*this == ZERO) return 0.0f;
   if (*this == ONE) return 1.0f;
 
-  if (abs(*this) > std::numeric_limits<float>::max()) {
+  if (abs(*this) > std::numeric_limits<std::float32_t>::max()) {
     if (*this > 0)
-      return std::numeric_limits<float>::max();
+      return std::numeric_limits<std::float32_t>::max();
     else
-      return -std::numeric_limits<float>::max();
+      return -std::numeric_limits<std::float32_t>::max();
   }
 
   // To IEEE 754 form
@@ -1094,19 +1056,19 @@ float BigNum::BigInt::to_float() const {
     tmp |= (1u << 31);
   }
 
-  return reinterpret_cast<float &>(tmp);
+  return reinterpret_cast<std::float32_t &>(tmp);
 }
 
-double BigNum::BigInt::to_double() const {
+std::float64_t BigNum::BigInt::to_double() const {
   if (*this == NEG_ONE) return -1.0;
   if (*this == ZERO) return 0.0;
   if (*this == ONE) return 1.0;
 
-  if (abs(*this) > std::numeric_limits<double>::max()) {
+  if (abs(*this) > std::numeric_limits<std::float64_t>::max()) {
     if (*this > 0)
-      return std::numeric_limits<double>::max();
+      return std::numeric_limits<std::float64_t>::max();
     else
-      return -std::numeric_limits<double>::max();
+      return -std::numeric_limits<std::float64_t>::max();
   }
 
   // To IEEE 754 form
@@ -1126,6 +1088,37 @@ double BigNum::BigInt::to_double() const {
     tmp |= (1ul << 63);
   }
 
-  return reinterpret_cast<double &>(tmp);
+  return reinterpret_cast<std::float64_t &>(tmp);
 }
+
+//
+// Random number
+//
+
+BigIntRand::BigIntRand() { rng = std::mt19937{std::random_device()()}; }
+
+BigIntRand::BigIntRand(std::uint32_t seed) { rng = std::mt19937{seed}; }
+
+BigInt BigIntRand::random(std::size_t bits) {
+  // std::mt19937 is 32 bit, so ensure it matches WORD
+  static_assert(std::is_same<std::uint32_t, BigInt::WORD>::value,
+                "Type mismatch");
+
+  if (bits == 0u) return BigInt::ZERO;
+
+  auto ret = BigInt::ZERO;
+  std::size_t i{0};
+  for (i = 0; i < bits / BigInt::WORD_BITS; ++i)
+    ret.set_word(i, word_dist(rng));
+
+  auto remainder = bits % BigInt::WORD_BITS;
+  if (remainder) {
+    // Add another WORD of randomness, then shift it down to size
+    ret.set_word(i, word_dist(rng));
+    ret >>= (BigInt::WORD_BITS - remainder);
+  }
+
+  return ret.normalize();
+}
+
 }  // namespace BigNum

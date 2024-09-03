@@ -9,6 +9,7 @@
 
 #include "big_int.hpp"
 using BigNum::BigInt;
+using BigNum::BigIntRand;
 
 //
 // Simple usage

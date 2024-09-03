@@ -10,6 +10,8 @@
 
 #include <functional>
 #include <iostream>
+#include <random>
+#include <stdfloat>
 #include <string>
 #include <vector>
 
@@ -63,13 +65,13 @@ class BigInt {
    * @brief Creates a BigIint equal to supplied data, rounds towards zero.
    * @param num a single precision floating point
    */
-  BigInt(float num);
+  BigInt(std::float32_t num);
 
   /**
    * @brief Creates a BigIint equal to supplied data, rounds towards zero.
    * @param num a double precision floating point
    */
-  BigInt(double num);
+  BigInt(std::float64_t num);
 
   // Comparison operators. The others are provided by default (!=, <, <=, >=, >)
   std::strong_ordering operator<=>(const BigInt &other) const;
@@ -177,8 +179,8 @@ class BigInt {
   std::int64_t to_int64_t() const;
 
   // Floating point representations (will truncate at FLT_MAX equivalents)
-  float to_float() const;
-  double to_double() const;
+  std::float32_t to_float() const;
+  std::float64_t to_double() const;
 
   //
   // Useful constants
@@ -206,7 +208,7 @@ class BigInt {
    */
 
   using WORD = std::uint32_t;
-  using CALC = std::uint64_t;
+  using CALC = std::uint64_t;  // i.e. a double word
   static const std::size_t WORD_BITS{32};
   static const WORD WORD_MASK{0xFFFFFFFF};
 
@@ -230,11 +232,45 @@ class BigInt {
   BigInt &add(const BigInt &other);
   BigInt &sub(const BigInt &other);
   BigInt &mul(const BigInt &other);
+
+  friend class BigIntRand;
 };
 
 struct DivMod {
   BigInt quot;
   BigInt rem;
+};
+
+/**
+ * @brief Generates pseudo random BigInts via mt19937
+ */
+class BigIntRand {
+ public:
+  /**
+   * @brief Construct a new BigIntRand object
+   */
+  BigIntRand();
+
+  /**
+   * @brief Construct a new BigIntRand
+   *
+   * @param seed the seed for the random number generator
+   */
+  BigIntRand(std::uint32_t seed);
+
+  /**
+   * @brief Generate a pseudo random number up to specified size (leading zeros
+   * will be pruned)
+   *
+   * @param bits size of random number
+   * @return BigInt
+   */
+  BigInt random(std::size_t bits);
+
+ private:
+  // A seeded RNG, and a distribution across the entire WORD range
+  std::mt19937 rng;
+  std::uniform_int_distribution<BigInt::WORD> word_dist{};
 };
 
 }  // namespace BigNum

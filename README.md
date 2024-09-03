@@ -3,7 +3,7 @@ A (toy) signed integer class with unlimited variable magnitude.
 
 # Example
 ## Checkout and build
-N.B. Requires C++20 compiler, plus libfmt-dev and catch2 installed.
+N.B. Requires a recent C++23 compiler (e.g. gcc-14), plus catch2 installed.
 
 ```bash
 git clone https://github.com/ch6574/BigNum.git && cd BigNum
