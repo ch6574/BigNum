@@ -56,7 +56,7 @@ class BigInt {
   BigInt(std::int64_t data);
 
   /**
-   * @brief Creates a BigIint equal to supplied string.
+   * @brief Creates a BigInt equal to supplied string.
    * @param num A string, either decimal "1234"  or hex "0x1234"
    */
   explicit BigInt(std::string_view num);
@@ -74,71 +74,72 @@ class BigInt {
   BigInt(std::float64_t num);
 
   // Comparison operators. The others are provided by default (!=, <, <=, >=, >)
-  std::strong_ordering operator<=>(const BigInt &other) const;
-  bool operator==(const BigInt &other) const;
+  std::strong_ordering operator<=>(const BigInt& other) const;
+  std::strong_ordering compare_magnitude(const BigInt& other) const;
+  bool operator==(const BigInt& other) const;
 
   // Assignment operators
-  BigInt &operator+=(const BigInt &other);
-  BigInt &operator-=(const BigInt &other);
-  BigInt &operator*=(const BigInt &other);
-  BigInt &operator/=(const BigInt &other);
-  BigInt &operator%=(const BigInt &other);
-  BigInt &operator&=(const BigInt &other);
-  BigInt &operator|=(const BigInt &other);
-  BigInt &operator^=(const BigInt &other);
-  BigInt &operator<<=(std::size_t bits);  // Magnitude shift only
-  BigInt &operator>>=(std::size_t bits);  // Magnitude shift only
+  BigInt& operator+=(const BigInt& other);
+  BigInt& operator-=(const BigInt& other);
+  BigInt& operator*=(const BigInt& other);
+  BigInt& operator/=(const BigInt& other);
+  BigInt& operator%=(const BigInt& other);
+  BigInt& operator&=(const BigInt& other);
+  BigInt& operator|=(const BigInt& other);
+  BigInt& operator^=(const BigInt& other);
+  BigInt& operator<<=(std::size_t bits);  // Magnitude shift only
+  BigInt& operator>>=(std::size_t bits);  // Magnitude shift only
 
   // Increment operators
-  BigInt &operator++();
+  BigInt& operator++();
   BigInt operator++(int);
-  BigInt &operator--();
+  BigInt& operator--();
   BigInt operator--(int);
 
   // Arithmetic operators
-  friend BigInt operator+(const BigInt &lhs, const BigInt &rhs);
+  friend BigInt operator+(const BigInt& lhs, const BigInt& rhs);
   BigInt operator+() const;
-  friend BigInt operator-(const BigInt &lhs, const BigInt &rhs);
+  friend BigInt operator-(const BigInt& lhs, const BigInt& rhs);
   BigInt operator-() const;
-  friend BigInt operator*(const BigInt &lhs, const BigInt &rhs);
-  friend BigInt operator/(const BigInt &lhs, const BigInt &rhs);
-  friend BigInt operator%(const BigInt &lhs, const BigInt &rhs);
+  friend BigInt operator*(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator/(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator%(const BigInt& lhs, const BigInt& rhs);
   BigInt operator~() const;
-  friend BigInt operator&(const BigInt &lhs, const BigInt &rhs);
-  friend BigInt operator|(const BigInt &lhs, const BigInt &rhs);
-  friend BigInt operator^(const BigInt &lhs, const BigInt &rhs);
-  friend BigInt operator<<(const BigInt &lhs, std::size_t bits);
-  friend BigInt operator>>(const BigInt &lhs, std::size_t bits);
+  friend BigInt operator&(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator|(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator^(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator<<(const BigInt& lhs, std::size_t bits);
+  friend BigInt operator>>(const BigInt& lhs, std::size_t bits);
 
-  static BigInt abs(const BigInt &num);
+  static BigInt abs(const BigInt& num);
 
   /**
    * @brief Similar to Python's "divmod", division that returns quotient and
    * remainder together. Different in that here we divide towards zero.
    */
-  static DivMod div(const BigInt &dividend, const BigInt &divisor);
+  static DivMod div(const BigInt& dividend, const BigInt& divisor);
 
   /**
    * @brief Raises base to the power of exp.
    */
-  static BigInt pow(const BigInt &base, const BigInt &exp);
+  static BigInt pow(const BigInt& base, const BigInt& exp);
 
   /**
    * @brief Raises base to the power of exp, modulo mod.
    */
-  static BigInt pow(const BigInt &base, const BigInt &exp, const BigInt &mod);
+  static BigInt pow(const BigInt& base, const BigInt& exp, const BigInt& mod);
 
   /**
    * @brief The integer square root, where 1 <= result <= actual root.
    *
    * (Positive numbers only.)
    */
-  static BigInt isqrt(const BigInt &num);
+  static BigInt isqrt(const BigInt& num);
 
   /**
    * @brief Returns the greatest common divisor of a and b, else zero.
    */
-  static BigInt gcd(const BigInt &a, const BigInt &b);
+  static BigInt gcd(const BigInt& a, const BigInt& b);
 
   /**
    * @brief The floor log2 of num.
@@ -147,7 +148,7 @@ class BigInt {
 
    * (Positive numbers only.)
    */
-  static BigInt log2(const BigInt &num);
+  static BigInt log2(const BigInt& num);
 
   /**
    * @brief The size of this integer in bits.
@@ -164,7 +165,7 @@ class BigInt {
   //
 
   // Stream out as hex
-  friend std::ostream &operator<<(std::ostream &os, const BigInt &bn);
+  friend std::ostream &operator<<(std::ostream &os, const BigInt& bn);
   // Binary representation
   std::string to_binary() const;
   // Decimal representation
@@ -208,7 +209,7 @@ class BigInt {
    */
 
   using WORD = std::uint32_t;
-  using CALC = std::uint64_t;  // i.e. a double word
+  using DWORD = std::uint64_t;  // i.e. a double word
   static const std::size_t WORD_BITS{32};
   static const WORD WORD_MASK{0xFFFFFFFF};
 
@@ -223,15 +224,15 @@ class BigInt {
   void set_word(std::size_t offset, WORD data);
 
   // Utilities
-  BigInt &normalize();
-  void map(const BigInt &other, std::function<WORD(WORD, WORD)> func);
-  static BigInt map(const BigInt &lhs, const BigInt &rhs,
+  BigInt& normalize();
+  void map(const BigInt& other, std::function<WORD(WORD, WORD)> func);
+  static BigInt map(const BigInt& lhs, const BigInt& rhs,
                     std::function<WORD(WORD, WORD)> func);
 
   // Math implementations
-  BigInt &add(const BigInt &other);
-  BigInt &sub(const BigInt &other);
-  BigInt &mul(const BigInt &other);
+  BigInt& add(const BigInt& other);
+  BigInt& sub(const BigInt& other);
+  BigInt& mul(const BigInt& other);
 
   friend class BigIntRand;
 };

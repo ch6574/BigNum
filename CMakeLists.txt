@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.25...3.30)
 
 project(BigNum VERSION 1.0 LANGUAGES CXX)
 
@@ -13,7 +13,7 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
-# Locate catch2 (e.g. installed by apt)
+# Locate catch2 (e.g. installed by apt/brew)
 find_package(Catch2 3 REQUIRED)
 
 # BigInt library

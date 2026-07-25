@@ -77,7 +77,7 @@ BigInt::BigInt(std::int64_t data) {
  * @brief Mainly string parsing logic. If the string starts with "0x" we parse
  * as hex, else we parse as decimal.
  *
- * Separators ' are allowed, so "0x1234'5678" is eqivalent to "0x12345678".
+ * Separators ' are allowed, so "0x1234'5678" is equivalent to "0x12345678".
  */
 BigInt::BigInt(std::string_view num) : negative{false} {
   if ((num.length() > 2 &&
@@ -107,9 +107,9 @@ BigInt::BigInt(std::string_view num) : negative{false} {
           WORD i{0};
           std::from_chars(v.data(), v.data() + v.size(), i, 16);
           tmp <<= v.size() * 4;  // each char is 4 bits
-          tmp += i;
+          tmp.add(i);
         });
-    magnitude = std::move(tmp.magnitude);  // Take the tmp BigInt's data
+    magnitude = std::move(tmp.magnitude);
   } else if (num.length() > 0) {
     //
     // Assume decimal. Remove any ' separators, then validate.
@@ -129,16 +129,16 @@ BigInt::BigInt(std::string_view num) : negative{false} {
     static unsigned pow10[] = {1,           10,           100,       1'000,
                                10'000,      100'000,      1'000'000, 10'000'000,
                                100'000'000, 1'000'000'000};
-    // // Read string in chunks of 9 decimal chars, and sum into tmp
+    // Read string in chunks of 9 decimal chars, and sum into tmp
     auto tmp = BigInt::ZERO;
     std::ranges::for_each(
         std::string_view{dec} | std::views::chunk(9), [&](auto v) {
           WORD i{0};
           std::from_chars(v.data(), v.data() + v.size(), i, 10);
           tmp *= pow10[v.size()];
-          tmp += i;
+          tmp.add(i);
         });
-    magnitude = std::move(tmp.magnitude);  // Take the tmp BigInt's data
+    magnitude = std::move(tmp.magnitude);
   } else {
     throw std::invalid_argument("Invalid numeric string: " + std::string{num});
   }
@@ -153,7 +153,7 @@ BigInt::BigInt(std::float32_t num) {
   }
 
   // IEEE 754
-  auto tmp = reinterpret_cast<std::uint32_t &>(num);
+  auto tmp = std::bit_cast<std::uint32_t>(num);
   BigInt::negative = (tmp >> 31) & 0x1;      // bit 31 is sign
   auto exp = ((tmp >> 23) & 0xFF) - 127;     // bits 23-30 are exponent
   auto frac = (tmp & 0x7FFFFF) | (1 << 23);  // 0-22 are fraction, +1
@@ -175,7 +175,7 @@ BigInt::BigInt(std::float64_t num) {
   }
 
   // IEEE 754
-  auto tmp = reinterpret_cast<std::uint64_t &>(num);
+  auto tmp = std::bit_cast<std::uint64_t>(num);
   BigInt::negative = (tmp >> 63) & 0x1;               // bit 63 is sign
   auto exp = ((tmp >> 52) & 0x7FF) - 1023;            // bits 52-62 are exponent
   auto frac = (tmp & 0xFFFFFFFFFFFFF) | (1ul << 52);  // 0-51 are fraction, +1
@@ -209,7 +209,7 @@ BigInt::WORD BigInt::get_word(std::size_t offset) const {
 
 /**
  * @brief A safe setter of a "word" at supplied offset. Underlying storage will
- * grow to accomodate offset if out of bounds.
+ * grow to accommodate offset if out of bounds.
  *
  * @param offset the offset
  * @param data the word to set
@@ -223,7 +223,7 @@ void BigInt::set_word(std::size_t offset, WORD data) {
 /**
  * @brief Discards any superfluous leading zeros
  */
-inline BigInt &BigInt::normalize() {
+inline BigInt& BigInt::normalize() {
   while (!magnitude.empty() && magnitude.back() == WORD{0})
     magnitude.pop_back();
 
@@ -239,7 +239,7 @@ inline BigInt &BigInt::normalize() {
  * @param other the other number
  * @param func the supplied func to map over two WORDs
  */
-void BigInt::map(const BigInt &other, std::function<WORD(WORD, WORD)> func) {
+void BigInt::map(const BigInt& other, std::function<WORD(WORD, WORD)> func) {
   auto max_size = std::max(magnitude.size(), other.magnitude.size());
   if (magnitude.size() < max_size) magnitude.resize(max_size);
 
@@ -259,7 +259,7 @@ void BigInt::map(const BigInt &other, std::function<WORD(WORD, WORD)> func) {
  * @param func the supplied func to map over two WORDs
  * @return BigInt. N.B. sign is copied from lhs to return value
  */
-BigInt BigInt::map(const BigInt &lhs, const BigInt &rhs,
+BigInt BigInt::map(const BigInt& lhs, const BigInt& rhs,
                    std::function<WORD(WORD, WORD)> func) {
   // Apply func() across all "words"
   auto max_size = std::max(lhs.magnitude.size(), rhs.magnitude.size());
@@ -289,7 +289,7 @@ BigInt BigInt::map(const BigInt &lhs, const BigInt &rhs,
  * @param other the quantity to add.
  * @return BigInt& this
  */
-BigInt &BigInt::add(const BigInt &other) {
+BigInt& BigInt::add(const BigInt& other) {
   // Short circuit simple cases
   if (other == ZERO) return *this;
   if (*this == ZERO) {
@@ -301,14 +301,14 @@ BigInt &BigInt::add(const BigInt &other) {
   WORD carry{0};
   for (auto &i : other.magnitude) {
     // All the math is 64bit
-    CALC res =
-        static_cast<CALC>(get_word(offset)) + static_cast<CALC>(i) + carry;
+    DWORD res =
+        static_cast<DWORD>(get_word(offset)) + static_cast<DWORD>(i) + carry;
     set_word(offset, res & WORD_MASK);  // Lower 32 is result
     carry = res >> WORD_BITS;           // Upper 32 is the carry
     ++offset;
   }
   while (carry) {
-    CALC res = static_cast<CALC>(get_word(offset)) + carry;
+    DWORD res = static_cast<DWORD>(get_word(offset)) + carry;
     set_word(offset, res & WORD_MASK);  // Lower 32 is result
     carry = res >> WORD_BITS;           // Upper 32 is the carry
     ++offset;
@@ -329,8 +329,8 @@ BigInt &BigInt::add(const BigInt &other) {
  * @param other the quantity to subtract.
  * @return BigInt& this
  */
-BigInt &BigInt::sub(const BigInt &other) {
-  assert(*this >= other);  // Else can't guarantee borrow logic
+BigInt& BigInt::sub(const BigInt& other) {
+  assert(compare_magnitude(other) != std::strong_ordering::less);  // Else can't guarantee borrow logic
 
   // Short circuit simple cases
   if (other == ZERO) return *this;
@@ -339,20 +339,20 @@ BigInt &BigInt::sub(const BigInt &other) {
   WORD borrow{0};
 
   // i.e. "borrow 1 from next bucket"
-  const CALC tentative = CALC{1} << WORD_BITS;
+  const DWORD tentative = DWORD{1} << WORD_BITS;
 
   for (auto &i : other.magnitude) {
     // All the math is 64bit
-    CALC a = static_cast<CALC>(get_word(offset)) + tentative;
-    CALC b = static_cast<CALC>(i) + borrow;
-    CALC res = a - b;
+    DWORD a = static_cast<DWORD>(get_word(offset)) + tentative;
+    DWORD b = static_cast<DWORD>(i) + borrow;
+    DWORD res = a - b;
     set_word(offset, res & WORD_MASK);  // Lower 32 is result
     borrow = res <= WORD_MASK;          // Did we need the tentative borrow?
     ++offset;
   }
   while (borrow) {
-    CALC a = static_cast<CALC>(get_word(offset)) + tentative;
-    CALC res = a - borrow;
+    DWORD a = static_cast<DWORD>(get_word(offset)) + tentative;
+    DWORD res = a - borrow;
     set_word(offset, res & WORD_MASK);  // Lower 32 is result
     borrow = res <= WORD_MASK;          // Did we need the tentative borrow?
     ++offset;
@@ -373,7 +373,7 @@ BigInt &BigInt::sub(const BigInt &other) {
  * @param other the quantity to multiply by
  * @return BigInt& this
  */
-BigInt &BigInt::mul(const BigInt &other) {
+BigInt& BigInt::mul(const BigInt& other) {
   // Short circuit simple cases
   if (other == ZERO) {
     magnitude.clear();
@@ -404,12 +404,12 @@ BigInt &BigInt::mul(const BigInt &other) {
   for (auto i = 0ul; i < magnitude.size(); ++i) {
     for (auto j = 0ul; j < other.magnitude.size(); ++j) {
       // All the math is 64bit
-      CALC l = static_cast<CALC>(get_word(i));
-      CALC r = static_cast<CALC>(other.get_word(j));
+      DWORD l = static_cast<DWORD>(get_word(i));
+      DWORD r = static_cast<DWORD>(other.get_word(j));
 
       // Shift product by current power we are at (i,j) and accumulate total
       auto res = BigInt(l * r) <<= ((i + j) * WORD_BITS);
-      accum += res;
+      accum.add(res);
     }
   }
 
@@ -424,35 +424,41 @@ BigInt &BigInt::mul(const BigInt &other) {
 /**
  * @brief The "spaceship" operator, providing strong_ordering.
  */
-std::strong_ordering BigInt::operator<=>(const BigInt &other) const {
+std::strong_ordering BigInt::operator<=>(const BigInt& other) const {
   // Sign tests
   if (!negative && other.negative) return std::strong_ordering::greater;
   if (negative && !other.negative) return std::strong_ordering::less;
 
+  // Magnitude tests
+  auto compare = compare_magnitude(other);
+  if (negative && compare == std::strong_ordering::greater)
+    return std::strong_ordering::less;
+  if (negative && compare == std::strong_ordering::less)
+    return std::strong_ordering::greater;
+  return compare;
+}
+
+std::strong_ordering BigInt::compare_magnitude(const BigInt& other) const {
   // Fast magnitude tests
   if (magnitude == other.magnitude) return std::strong_ordering::equal;
   if (magnitude.size() < other.magnitude.size())
-    return negative ? std::strong_ordering::greater
-                    : std::strong_ordering::less;
+    return std::strong_ordering::less;
   if (magnitude.size() > other.magnitude.size())
-    return negative ? std::strong_ordering::less
-                    : std::strong_ordering::greater;
-
+    return std::strong_ordering::greater;
+  
   // "word" based compare, largest first
   auto i = std::max(magnitude.size(), other.magnitude.size()) - 1;
   do {
     if (get_word(i) < other.get_word(i))
-      return negative ? std::strong_ordering::greater
-                      : std::strong_ordering::less;
+      return std::strong_ordering::less;
     if (get_word(i) > other.get_word(i))
-      return negative ? std::strong_ordering::less
-                      : std::strong_ordering::greater;
+      return std::strong_ordering::greater;
   } while (i-- > 0);
 
   assert(0);  // Shouldn't ever get here!
 }
 
-bool BigInt::operator==(const BigInt &other) const {
+bool BigInt::operator==(const BigInt& other) const {
   return negative == other.negative && magnitude == other.magnitude;
 }
 
@@ -460,11 +466,11 @@ bool BigInt::operator==(const BigInt &other) const {
 // Assignment operators
 //
 
-BigInt &BigInt::operator+=(const BigInt &other) {
+BigInt& BigInt::operator+=(const BigInt& other) {
   if (negative == other.negative) {
     // Same signs, so add: abs(this) + abs(other)
     return add(other);
-  } else if (other <= *this) {
+  } else if (compare_magnitude(other) != std::strong_ordering::less) {
     // Different signs, so sub: abs(this) - abs(other)
     return sub(other);
   } else {
@@ -472,52 +478,53 @@ BigInt &BigInt::operator+=(const BigInt &other) {
     auto tmp = other;
     tmp.sub(*this);
     magnitude = std::move(tmp.magnitude);
+    negative = other.negative;
     return *this;
   }
 }
 
-BigInt &BigInt::operator-=(const BigInt &other) {
+BigInt& BigInt::operator-=(const BigInt& other) {
   if (negative != other.negative) {
     // Different signs, so add: abs(this) + abs(other)
     return add(other);
-  } else if (other <= *this) {
+  } else if (compare_magnitude(other) != std::strong_ordering::less) {
     // Same signs, so sub: abs(this) - abs(other)
     return sub(other);
   } else {
     // Same signs, so sub: -(abs(other) - abs(this))
     auto tmp = other;
-    tmp.add(*this);
+    tmp.sub(*this);
     magnitude = std::move(tmp.magnitude);
-    negative = true;
+    negative = !negative;
     return *this;
   }
 }
 
-BigInt &BigInt::operator*=(const BigInt &other) { return mul(other); }
+BigInt& BigInt::operator*=(const BigInt& other) { return mul(other); }
 
-BigInt &BigInt::operator/=(const BigInt &other) {
+BigInt& BigInt::operator/=(const BigInt& other) {
   auto tmp = div(BigInt(*this), other);
   magnitude = std::move(tmp.quot.magnitude);
   return *this;
 }
 
-BigInt &BigInt::operator%=(const BigInt &other) {
+BigInt& BigInt::operator%=(const BigInt& other) {
   auto tmp = div(BigInt(*this), other);
   magnitude = std::move(tmp.rem.magnitude);
   return *this;
 }
 
-BigInt &BigInt::operator&=(const BigInt &other) {
+BigInt& BigInt::operator&=(const BigInt& other) {
   map(other, [](auto l, auto r) { return l & r; });
   return *this;
 }
 
-BigInt &BigInt::operator|=(const BigInt &other) {
+BigInt& BigInt::operator|=(const BigInt& other) {
   map(other, [](auto l, auto r) { return l | r; });
   return *this;
 }
 
-BigInt &BigInt::operator^=(const BigInt &other) {
+BigInt& BigInt::operator^=(const BigInt& other) {
   map(other, [](auto l, auto r) { return l ^ r; });
   return *this;
 }
@@ -529,7 +536,7 @@ BigInt &BigInt::operator^=(const BigInt &other) {
  * @param bits number of bits to shift
  * @return BigInt& this
  */
-BigInt &BigInt::operator<<=(std::size_t bits) {
+BigInt& BigInt::operator<<=(std::size_t bits) {
   auto words_shift = bits / WORD_BITS;
   auto bits_shift = bits % WORD_BITS;
 
@@ -560,7 +567,7 @@ BigInt &BigInt::operator<<=(std::size_t bits) {
  * @param bits number of bits to shift
  * @return BigInt& this
  */
-BigInt &BigInt::operator>>=(std::size_t bits) {
+BigInt& BigInt::operator>>=(std::size_t bits) {
   auto words_shift = bits / WORD_BITS;
   auto bits_shift = bits % WORD_BITS;
 
@@ -570,7 +577,7 @@ BigInt &BigInt::operator>>=(std::size_t bits) {
         magnitude.begin(),
         magnitude.begin() + std::min(words_shift, magnitude.size()));
 
-  // Right shift the remaining bits, carrying any overflow accordinly.
+  // Right shift the remaining bits, carrying any overflow accordingly.
   if (bits_shift) {
     WORD carry{0};
     for (auto &i : magnitude | std::views::reverse) {
@@ -589,14 +596,14 @@ BigInt &BigInt::operator>>=(std::size_t bits) {
 // Increment operators
 //
 
-BigInt &BigInt::operator++() { return (*this) += ONE; }
+BigInt& BigInt::operator++() { return (*this) += ONE; }
 BigInt BigInt::operator++(int) {
   BigInt ret(*this);
   ++(*this);
   return ret;
 }
 
-BigInt &BigInt::operator--() { return (*this) -= ONE; }
+BigInt& BigInt::operator--() { return (*this) -= ONE; }
 BigInt BigInt::operator--(int) {
   BigInt ret(*this);
   --(*this);
@@ -607,14 +614,14 @@ BigInt BigInt::operator--(int) {
 // Arithmetic operators
 //
 
-BigInt operator+(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator+(const BigInt& lhs, const BigInt& rhs) {
   auto ret = lhs;
   return ret += rhs;
 }
 
 BigInt BigInt::operator+() const { return *this; }
 
-BigInt operator-(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator-(const BigInt& lhs, const BigInt& rhs) {
   auto ret = lhs;
   return ret -= rhs;
 }
@@ -625,16 +632,16 @@ BigInt BigInt::operator-() const {
   return ret;
 }
 
-BigInt operator*(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator*(const BigInt& lhs, const BigInt& rhs) {
   auto ret = lhs;
   return ret *= rhs;
 }
 
-BigInt operator/(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator/(const BigInt& lhs, const BigInt& rhs) {
   return BigInt::div(lhs, rhs).quot;
 }
 
-BigInt operator%(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator%(const BigInt& lhs, const BigInt& rhs) {
   return BigInt::div(lhs, rhs).rem;
 }
 
@@ -648,29 +655,29 @@ BigInt BigInt::operator~() const {
   return -(*this) - ONE;
 }
 
-BigInt operator&(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator&(const BigInt& lhs, const BigInt& rhs) {
   return BigInt::map(lhs, rhs, [](auto l, auto r) { return l & r; });
 }
 
-BigInt operator|(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator|(const BigInt& lhs, const BigInt& rhs) {
   return BigInt::map(lhs, rhs, [](auto l, auto r) { return l | r; });
 }
 
-BigInt operator^(const BigInt &lhs, const BigInt &rhs) {
+BigInt operator^(const BigInt& lhs, const BigInt& rhs) {
   return BigInt::map(lhs, rhs, [](auto l, auto r) { return l ^ r; });
 }
 
-BigInt operator<<(const BigInt &lhs, std::size_t bits) {
+BigInt operator<<(const BigInt& lhs, std::size_t bits) {
   auto ret = lhs;
   return ret <<= bits;
 }
 
-BigInt operator>>(const BigInt &lhs, std::size_t bits) {
+BigInt operator>>(const BigInt& lhs, std::size_t bits) {
   auto ret = lhs;
   return ret >>= bits;
 }
 
-BigInt BigInt::abs(const BigInt &num) {
+BigInt BigInt::abs(const BigInt& num) {
   auto ret = num;
   ret.negative = false;
   return ret;
@@ -689,7 +696,7 @@ BigInt BigInt::abs(const BigInt &num) {
  * @param divisor the divisor
  * @return DivMod the result
  */
-DivMod BigInt::div(const BigInt &dividend, const BigInt &divisor) {
+DivMod BigInt::div(const BigInt& dividend, const BigInt& divisor) {
   // Short circuits
   if (divisor == ZERO) throw std::invalid_argument("Divide by zero!");
   if (divisor == ONE) return DivMod(dividend, ZERO);
@@ -698,14 +705,18 @@ DivMod BigInt::div(const BigInt &dividend, const BigInt &divisor) {
   if (divisor == TWO || divisor == NEG_TWO) {
     auto quot = dividend >> 1u;
     auto rem = dividend & 1u;
-    return DivMod(dividend.negative != divisor.negative ? -quot : quot,
-                  divisor == NEG_TWO ? -rem : rem);
+    quot.negative = (dividend.negative != divisor.negative);
+    rem.negative = dividend.negative;
+    return DivMod(quot.normalize(), rem.normalize());
   }
   if (dividend == divisor)
     return DivMod(dividend.negative == divisor.negative ? ONE : NEG_ONE, ZERO);
-  if (abs(dividend) < abs(divisor)) return DivMod(ZERO, dividend);
+  if (dividend.compare_magnitude(divisor) == std::strong_ordering::less) return DivMod(ZERO, dividend);
+
   // N.B. "Hackers Delight" chapter 10 "Integer Division By Constants" is
   // an entire section on alternative algorithms suitable for special cases
+  //
+  // Also Knuth's Algorithm D (Word-by-Word Division)
 
   auto div_d = abs(dividend);
   auto div_s = abs(divisor);
@@ -719,8 +730,8 @@ DivMod BigInt::div(const BigInt &dividend, const BigInt &divisor) {
   for (std::size_t i{0}; i <= k; ++i) {
     quotient <<= 1;
     if (div_d >= div_s) {
-      div_d -= div_s;
-      quotient += ONE;  // Set the i'th bit
+      div_d.sub(div_s);
+      quotient.add(ONE);  // Set the i'th bit
     }
     div_s >>= 1;
   }
@@ -741,7 +752,7 @@ DivMod BigInt::div(const BigInt &dividend, const BigInt &divisor) {
  * @param exp the exponenet to raise the base by
  * @return BigInt the result
  */
-BigInt BigInt::pow(const BigInt &base, const BigInt &exp) {
+BigInt BigInt::pow(const BigInt& base, const BigInt& exp) {
   if ((base == ONE || base == NEG_ONE) && exp == NEG_ONE) return base;
   if (exp < ZERO) return ZERO;  // These will always floor to zero
   if (exp == ZERO) return ONE;
@@ -756,9 +767,9 @@ BigInt BigInt::pow(const BigInt &base, const BigInt &exp) {
   // For all 'n', if odd multiply by base, if even multiply by base squared.
   while (n > ZERO) {
     if ((n & ONE) == ONE) {
-      // n is odd
+      // n is odd, so multiply
+      // (no need to subtract the 1 as we shift the last bit away)
       ret *= x;
-      n -= ONE;
     }
     // n is even, square and divide by 2
     x *= x;
@@ -776,7 +787,7 @@ BigInt BigInt::pow(const BigInt &base, const BigInt &exp) {
  * @param exp the exponenet to raise the base by
  * @return BigInt the result
  */
-BigInt BigInt::pow(const BigInt &base, const BigInt &exp, const BigInt &mod) {
+BigInt BigInt::pow(const BigInt& base, const BigInt& exp, const BigInt& mod) {
   if ((base == ONE || base == NEG_ONE) && exp == NEG_ONE) return base;
   if (exp < ZERO) return ZERO;  // These will always floor to zero
   if (exp == ZERO) return ONE;
@@ -784,17 +795,17 @@ BigInt BigInt::pow(const BigInt &base, const BigInt &exp, const BigInt &mod) {
   if (exp == TWO) return (base * base) % mod;
 
   auto ret = ONE;
-  auto x = base;
+  auto x = base % mod;
   auto n = exp;
 
   // Simple logic!
   // If odd multiply by base, if even multiply by base squared; then mod.
   while (n > ZERO) {
     if ((n & ONE) == ONE) {
-      // n is odd
+      // n is odd, so multiply
+      // (no need to subtract the 1 as we shift the last bit away)
       ret *= x;
       ret %= mod;
-      n -= ONE;
     }
 
     // n is even, square. mod, and divide by 2
@@ -813,15 +824,15 @@ BigInt BigInt::pow(const BigInt &base, const BigInt &exp, const BigInt &mod) {
  * @param num the number to find the square root of
  * @return BigInt the result
  */
-BigInt BigInt::isqrt(const BigInt &num) {
+BigInt BigInt::isqrt(const BigInt& num) {
   if (num < ZERO)
     throw std::invalid_argument("Cannot caclulate negative roots!");
   if (num == ZERO) return ZERO;
   if (num == ONE) return ONE;
   if (num == TWO) return ONE;
 
-  auto x = num;
-  auto y = (num + ONE) >> 1;
+  auto x = ONE << ((num.bitsize() + 1) / 2);
+  auto y = (x + num / x) >> 1;
   while (y < x) {
     x = y;
     y = (x + num / x) >> 1;
@@ -838,7 +849,7 @@ BigInt BigInt::isqrt(const BigInt &num) {
  * @param b
  * @return BigInt
  */
-BigInt BigNum::BigInt::gcd(const BigInt &a, const BigInt &b) {
+BigInt BigNum::BigInt::gcd(const BigInt& a, const BigInt& b) {
   if (a == ZERO && b == ZERO) return ZERO;
   if (a == ZERO) return b;
   if (b == ZERO) return a;
@@ -855,9 +866,9 @@ BigInt BigNum::BigInt::gcd(const BigInt &a, const BigInt &b) {
   return abs(res);
 }
 
-BigInt BigInt::log2(const BigInt &num) {
+BigInt BigInt::log2(const BigInt& num) {
   if (num < ZERO)
-    throw std::invalid_argument("Cannot caclulate negative logs!");
+    throw std::invalid_argument("Cannot calculate negative logs!");
   if (num == ZERO) throw std::invalid_argument("Log of 0!");
   return num.bitsize() - 1;
 }
@@ -865,7 +876,7 @@ BigInt BigInt::log2(const BigInt &num) {
 /**
  * @brief The size of this integer in bits.
  *
- * N.B. ZERO accupies zero bits.
+ * N.B. ZERO occupies zero bits.
  *
  * @return std::size_t a count of the bits.
  */
@@ -898,7 +909,7 @@ std::size_t BigNum::BigInt::popcount() const {
  * @param bn the number
  * @return std::ostream& the human readable text
  */
-std::ostream &operator<<(std::ostream &os, const BigInt &bn) {
+std::ostream &operator<<(std::ostream &os, const BigInt& bn) {
   if (bn == BigInt::ZERO) {
     os << "0x0";
   } else {
@@ -993,7 +1004,7 @@ std::int32_t BigNum::BigInt::to_int32_t() const {
 
   auto data = get_word(0);
   if (negative) {
-    return (std::int32_t((1u << 31) - data) | (1u << 31));
+    return -std::int32_t(data);
   } else {
     return std::int32_t(data);
   }
@@ -1021,7 +1032,7 @@ std::int64_t BigNum::BigInt::to_int64_t() const {
   data <<= WORD_BITS;
   data |= get_word(0);
   if (negative) {
-    return (std::int64_t((1ul << 63) - data) | (1ul << 63));
+    return -std::int64_t(data);
   } else {
     return std::int64_t(data);
   }

@@ -165,6 +165,10 @@ TEST_CASE("Math") {
 
     // Negative cases
     REQUIRE(BigInt::ONE + BigInt::NEG_ONE == BigInt::ZERO);
+    REQUIRE((BigInt(-3) += BigInt(10)) == 7);
+    REQUIRE((BigInt(10) += BigInt(-3)) == 7);
+    REQUIRE((BigInt(-10) += BigInt(3)) == -7);
+    REQUIRE((BigInt(3) += BigInt(-10)) == -7);
   }
 
   SECTION("Subtraction") {
@@ -190,6 +194,9 @@ TEST_CASE("Math") {
 
     // Negative cases
     REQUIRE(BigInt::ZERO - BigInt::ONE == BigInt::NEG_ONE);
+    REQUIRE((BigInt(5) -= BigInt(12)) == -7);
+    REQUIRE((BigInt(-12) -= BigInt(-5)) == -7);
+    REQUIRE((BigInt(-5) -= BigInt(-12)) == 7);
   }
 
   SECTION("Negation") {
@@ -216,6 +223,17 @@ TEST_CASE("Math") {
     REQUIRE(BigInt::NEG_ONE * BigInt::NEG_ONE == BigInt::ONE);
     REQUIRE(bn_ff * BigInt::ONE == bn_ff);
     REQUIRE(bn_ff * BigInt::NEG_ONE == BigInt(-0xFF));
+
+    // Regular math
+    REQUIRE((BigInt(-5) * BigInt(3)) == -15);
+    REQUIRE((BigInt(5) * BigInt(-3)) == -15);
+    REQUIRE((BigInt(-5) * BigInt(10)) == -50);
+    REQUIRE((BigInt(5) * BigInt(-10)) == -50);
+    REQUIRE((BigInt(-5) * BigInt(-10)) == 50);
+    REQUIRE((BigInt(-7) * BigInt(2)) == -14);
+    REQUIRE((BigInt(-7) * BigInt(-2)) == 14);
+    REQUIRE((BigInt(-25) * BigInt(0)) == BigInt::ZERO);
+    REQUIRE((BigInt(0) * BigInt(-25)) == BigInt::ZERO);
   }
 
   SECTION("Division") {
@@ -229,17 +247,17 @@ TEST_CASE("Math") {
     REQUIRE(3u / bn_big == BigInt::ZERO);
 
     // Test "divmod"
-    auto tmp1 = BigInt::div(bn_big, 3u);
-    REQUIRE(tmp1.quot == BigInt("0x6115B66B0BC06115B66B0BC06115B66"));
-    REQUIRE(tmp1.rem == BigInt::TWO);
+    auto tmp = BigInt::div(bn_big, 3u);
+    REQUIRE(tmp.quot == BigInt("0x6115B66B0BC06115B66B0BC06115B66"));
+    REQUIRE(tmp.rem == BigInt::TWO);
 
-    auto tmp2 = BigInt::div(3u, bn_big);
-    REQUIRE(tmp2.quot == BigInt::ZERO);
-    REQUIRE(tmp2.rem == 3u);
+    tmp = BigInt::div(3u, bn_big);
+    REQUIRE(tmp.quot == BigInt::ZERO);
+    REQUIRE(tmp.rem == 3u);
 
-    auto tmp3 = BigInt::div(bn_big, bn_big);
-    REQUIRE(tmp3.quot == BigInt::ONE);
-    REQUIRE(tmp3.rem == BigInt::ZERO);
+    tmp = BigInt::div(bn_big, bn_big);
+    REQUIRE(tmp.quot == BigInt::ONE);
+    REQUIRE(tmp.rem == BigInt::ZERO);
 
     // Test assigning a division / mod
     REQUIRE((BigInt(0x2222u) /= 2u) == BigInt(0x1111u));
@@ -256,21 +274,44 @@ TEST_CASE("Math") {
     REQUIRE(bn_ff / BigInt::NEG_TWO == -BigInt(0x7Fu));
     REQUIRE(bn_ff / -bn_ff == BigInt::NEG_ONE);
 
-    auto tmp4 = BigInt::div(BigInt(7), BigInt(5));
-    REQUIRE(tmp4.quot == BigInt::ONE);
-    REQUIRE(tmp4.rem == BigInt::TWO);
+    // Divide by matching absolute values
+    tmp = BigInt::div(BigInt(-12), BigInt(12));
+    REQUIRE(tmp.quot == BigInt::NEG_ONE);
+    REQUIRE(tmp.rem == BigInt::ZERO);
 
-    auto tmp5 = BigInt::div(BigInt(-7), BigInt(5));
-    REQUIRE(tmp5.quot == BigInt::NEG_ONE);
-    REQUIRE(tmp5.rem == BigInt::NEG_TWO);
+    tmp = BigInt::div(BigInt(7), BigInt(5));
+    REQUIRE(tmp.quot == BigInt::ONE);
+    REQUIRE(tmp.rem == BigInt::TWO);
 
-    auto tmp6 = BigInt::div(BigInt(7), BigInt(-5));
-    REQUIRE(tmp6.quot == BigInt::NEG_ONE);
-    REQUIRE(tmp6.rem == BigInt::TWO);
+    tmp = BigInt::div(BigInt(-7), BigInt(5));
+    REQUIRE(tmp.quot == BigInt::NEG_ONE);
+    REQUIRE(tmp.rem == BigInt::NEG_TWO);
 
-    auto tmp7 = BigInt::div(BigInt(-7), BigInt(-5));
-    REQUIRE(tmp7.quot == BigInt::ONE);
-    REQUIRE(tmp7.rem == BigInt::NEG_TWO);
+    tmp = BigInt::div(BigInt(7), BigInt(-5));
+    REQUIRE(tmp.quot == BigInt::NEG_ONE);
+    REQUIRE(tmp.rem == BigInt::TWO);
+
+    tmp = BigInt::div(BigInt(-7), BigInt(-5));
+    REQUIRE(tmp.quot == BigInt::ONE);
+    REQUIRE(tmp.rem == BigInt::NEG_TWO);
+
+    // Standard truncation toward zero
+    tmp = BigInt::div(BigInt(3), BigInt(5));
+    REQUIRE(tmp.quot == BigInt::ZERO);
+    REQUIRE(tmp.rem == 3);
+
+    tmp = BigInt::div(BigInt(-3), BigInt(5));
+    REQUIRE(tmp.quot == BigInt::ZERO);
+    REQUIRE(tmp.rem == -3);
+
+    tmp = BigInt::div(BigInt(3), BigInt(-5));
+    REQUIRE(tmp.quot == BigInt::ZERO);
+    REQUIRE(tmp.rem == 3);
+
+    // Power of 2 bit-shifting shortcut optimization
+    tmp = BigInt::div(BigInt(-25), BigInt(-2));
+    REQUIRE(tmp.quot == 12);
+    REQUIRE(tmp.rem == BigInt::NEG_ONE);
 
     // Illogical cases
     REQUIRE_THROWS_WITH(bn_ff / BigInt::ZERO, "Divide by zero!");
@@ -309,7 +350,10 @@ TEST_CASE("Math") {
                         "Cannot caclulate negative roots!");
     REQUIRE(BigInt::isqrt(BigInt::ZERO) == BigInt::ZERO);
     REQUIRE(BigInt::isqrt(5u) == BigInt::TWO);
+    REQUIRE(BigInt::isqrt(16u) == 4u); // perfect square
     REQUIRE(BigInt::isqrt(bn_big) == BigInt("0x4443C4434C41F33D"));
+    REQUIRE(BigInt::isqrt(BigInt("18'014'398'509'481'983")) ==
+            BigInt("134'217'727"));    // sqrt(2^54 -1) is 134217727.999999996
   }
 
   SECTION("Greatest Common Divisor") {
@@ -325,7 +369,7 @@ TEST_CASE("Math") {
 
   SECTION("Log") {
     REQUIRE_THROWS_WITH(BigInt::log2(BigInt::NEG_ONE),
-                        "Cannot caclulate negative logs!");
+                        "Cannot calculate negative logs!");
     REQUIRE_THROWS_WITH(BigInt::log2(BigInt::ZERO), "Log of 0!");
     REQUIRE(BigInt::log2(BigInt::ONE) == 0u);
     REQUIRE(BigInt::log2(bn_ff) == 7u);     // log2(255) == 7.994...
@@ -580,6 +624,12 @@ TEST_CASE("Output") {
     REQUIRE(bn_big.to_int64_t() == 0x7FFFFFFF'FFFFFFFF);    // Truncated
     REQUIRE(-bn_big.to_int32_t() == -0x7FFFFFFF);           // Truncated
     REQUIRE(-bn_big.to_int64_t() == -0x7FFFFFFF'FFFFFFFF);  // Truncated
+
+    // Limits
+    REQUIRE(BigInt("-2147483648").to_int32_t() == std::numeric_limits<int32_t>::min());
+    REQUIRE(BigInt("2147483647").to_int32_t()  == std::numeric_limits<int32_t>::max());
+    REQUIRE(BigInt("-9223372036854775808").to_int64_t() == std::numeric_limits<int64_t>::min());
+    REQUIRE(BigInt("9223372036854775807").to_int64_t()  == std::numeric_limits<int64_t>::max());
   }
 }
 
